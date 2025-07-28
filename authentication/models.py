@@ -77,3 +77,18 @@ class UserAccount(AbstractBaseUser, PermissionsMixin):
     class Meta:
         verbose_name = _("User Account")
         verbose_name_plural = _("User Accounts")
+
+class Subscription(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    stripe_id = models.CharField(max_length=255, blank=True, null=True)
+    user = models.ForeignKey(UserAccount, on_delete=models.CASCADE)
+    subscription_type = models.CharField(max_length=20, choices=[
+        ('FREE', 'Free'),
+        ('PAID', 'Paid'),
+    ], default='FREE')
+    start_date = models.DateTimeField(blank=True, null=True)
+    end_date = models.DateTimeField(blank=True, null=True)
+    amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+
+    def __str__(self):
+        return f"{self.user.username}: {self.subscription_type}"

@@ -1,0 +1,36 @@
+# Python virtual environment
+venv/
+
+# Compiled Python files
+*.pyc
+*.pyo
+
+# Local development settings
+*.env
+.env
+.vscode/
+
+# Database file
+db.sqlite3
+
+# Static and media files
+staticfiles/
+media/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.iml
+
+# Logs and cache files
+*.log
+*.pyc
+__pycache__/
+
+# Dependencies and build files
+*.egg-info/
+dist/
+build/
+
+# Migration files
+*/migrations/*

@@ -149,7 +149,6 @@ REST_FRAMEWORK = {
     ),
 }
 
-
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=10),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=17),
@@ -159,3 +158,8 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
     'SIGNING_KEY': env('SIGNING_KEY'),
 }
+
+# stripe settings
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
+STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
