@@ -17,7 +17,12 @@ class UserLoginView(APIView):
 
     def post(self, request):
         serializer = UserLoginSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+
+        if not serializer.is_valid():
+            return Response(
+                {"errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         user = authenticate(
             email=serializer.validated_data['email'],
@@ -25,25 +30,32 @@ class UserLoginView(APIView):
         )
 
         if user is None:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response(
+                {"error": "Invalid email or password."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         refresh = CustomTokenObtainPairSerializer.get_token(user)
         access = refresh.access_token
 
-        response = Response({
+        return Response({
             "access_token": str(access),
             "refresh_token": str(refresh),
-        }, status=status.HTTP_200_OK,)
+            "message": "Login successful."
+        }, status=status.HTTP_200_OK)
 
-
-        return response
 
 class UserRegisterView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
         serializer = UserRegisterSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+
+        if not serializer.is_valid():
+            return Response(
+                {"errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             with transaction.atomic():
@@ -55,14 +67,16 @@ class UserRegisterView(APIView):
                 user.is_active = True
                 user.save()
         except IntegrityError:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Username or email already exists."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         refresh = CustomTokenObtainPairSerializer.get_token(user)
         access = refresh.access_token
 
-        response = Response({
+        return Response({
             "access_token": str(access),
             "refresh_token": str(refresh),
-        }, status=status.HTTP_200_OK,)
-
-        return response
+            "message": "User registered successfully."
+        }, status=status.HTTP_201_CREATED)
