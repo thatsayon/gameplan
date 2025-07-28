@@ -6,7 +6,8 @@ from django.db import IntegrityError, transaction
 from .serializers import (
     UserLoginSerializer,
     UserRegisterSerializer,
-    CustomTokenObtainPairSerializer
+    AboutSerializer,
+    CustomTokenObtainPairSerializer,
 )
 from .utils import generate_unique_username
 
@@ -80,3 +81,33 @@ class UserRegisterView(APIView):
             "refresh_token": str(refresh),
             "message": "User registered successfully."
         }, status=status.HTTP_201_CREATED)
+
+class AboutView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        serializer = AboutSerializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    def post(self, request):
+        user = request.user
+
+        if user.favorite_sport or user.details:
+            return Response({
+                "message": "About already updated."
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        serializer = AboutSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return Response(
+                {"errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer.save(user=request.user)
+
+        return Response({
+            "message": "About updated successfully."
+        }, status=status.HTTP_200_OK)

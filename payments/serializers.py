@@ -3,6 +3,7 @@ from rest_framework import serializers
 class CheckoutSessionSerializer(serializers.Serializer):
     amount = serializers.IntegerField()
     currency = serializers.CharField()
+    duration_type = serializers.CharField()
     success_url = serializers.CharField()
     cancel_url = serializers.CharField()
 

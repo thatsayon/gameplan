@@ -37,6 +37,9 @@ class UserAccount(AbstractBaseUser, PermissionsMixin):
     full_name = models.CharField(_("full name"), max_length=50)
     profile_pic = models.URLField(_("profile picture"), blank=True, null=True)
 
+    favorite_sport = models.CharField(max_length=20, blank=True, null=True)
+    details = models.TextField(blank=True, null=True)
+
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=False)
     date_joined = models.DateTimeField(default=timezone.now)
@@ -85,7 +88,13 @@ class Subscription(models.Model):
     subscription_type = models.CharField(max_length=20, choices=[
         ('FREE', 'Free'),
         ('PAID', 'Paid'),
+        ('TRIAL', 'Trial'),
     ], default='FREE')
+    duration_type = models.CharField(max_length=20, choices=[
+        ('MONTH', 'Month'),
+        ('YEAR', 'Year'),
+        ('WEEK', 'Week'),
+    ], default='MONTH')
     start_date = models.DateTimeField(blank=True, null=True)
     end_date = models.DateTimeField(blank=True, null=True)
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)

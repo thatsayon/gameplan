@@ -24,6 +24,7 @@ class CreateCheckoutSessionView(APIView):
             subscription = Subscription.objects.filter(user=request.user).first()
             if subscription:
                 subscription.stripe_id = session.id
+                subscription.duration_type = serializer.validated_data['duration_type']
                 subscription.save()
             else:
                 Subscription.objects.create(
@@ -57,7 +58,12 @@ class WebhookView(APIView):
                     subscription.subscription_type = 'PAID'
                     subscription.amount_paid = session.amount_total / 100
                     subscription.start_date = timezone.now()
-                    subscription.end_date = timezone.now() + timezone.timedelta(days=30)
+                    if subscription.duration_type == 'MONTH':
+                        subscription.end_date = timezone.now() + timezone.timedelta(days=30)
+                    elif subscription.duration_type == 'YEAR':
+                        subscription.end_date = timezone.now() + timezone.timedelta(days=365)
+                    elif subscription.duration_type == 'WEEK':
+                        subscription.end_date = timezone.now() + timezone.timedelta(days=7)
                     subscription.save()
 
 
