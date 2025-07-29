@@ -17,6 +17,9 @@ class ChatClassSerializer(serializers.ModelSerializer):
         model = ChatClass
         fields = "__all__"
     
+class ChatbotSaveSerializer(serializers.Serializer):
+    pin_date = serializers.DateTimeField(required=True)
+
 class ChatClassCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChatClass

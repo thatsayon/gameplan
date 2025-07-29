@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from authentication.models import Subscription
 from django.utils import timezone
-from .serializers import CheckoutSessionSerializer
+from .serializers import CheckoutSessionSerializer, SubscriptionSettingSerializer
 from .stripe_service import create_checkout_session
 import json
 import stripe
@@ -33,6 +33,49 @@ class CreateCheckoutSessionView(APIView):
                 )
 
         return Response({"checkout_url": session.url}, status=status.HTTP_200_OK)
+
+class FreeTrialView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        subscription = Subscription.objects.filter(user=request.user).first()
+        if subscription and subscription.subscription_type == 'TRIAL':
+            return Response({"detail": "Already subscribed"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        subscription = Subscription.objects.create(
+            user=request.user,
+            subscription_type='TRIAL',
+            start_date=timezone.now(),
+            end_date=timezone.now() + timezone.timedelta(days=7),
+            amount_paid=0,
+            duration_type='WEEK'
+        )
+
+        return Response({"message": "Free trial started successfully."}, status=status.HTTP_200_OK)
+
+class SubscriptionSettingView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        subscription = Subscription.objects.filter(user=request.user).first()
+        if not subscription:
+            return Response({"message": "No subscription found."}, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = SubscriptionSettingSerializer(subscription)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def delete(self, request):
+        subscription = Subscription.objects.filter(user=request.user).first()
+        if not subscription:
+            return Response({"message": "No subscription found."}, status=status.HTTP_404_NOT_FOUND)
+        
+        subscription.subscription_type = 'FREE'
+        subscription.amount_paid = 0
+        subscription.start_date = None
+        subscription.end_date = None
+        subscription.save()
+
+        return Response({"message": "Subscription deleted successfully."}, status=status.HTTP_200_OK)
 
 class WebhookView(APIView):
     def post(self, request, *args, **kwargs):
