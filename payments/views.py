@@ -43,8 +43,8 @@ class FreeTrialView(APIView):
         subscription = Subscription.objects.filter(user=request.user).first()
         if subscription and subscription.subscription_type == 'TRIAL':
             return Response({"detail": "Already subscribed"}, status=status.HTTP_400_BAD_REQUEST)
-        
-        Subscription.objects.create(
+
+        new_subscription = Subscription.objects.create(
             user=request.user,
             subscription_type='TRIAL',
             start_date=timezone.now(),
@@ -53,7 +53,12 @@ class FreeTrialView(APIView):
             duration_type='WEEK'
         )
 
+        # Generate tokens AFTER subscription is saved
         refresh = CustomTokenObtainPairSerializer.get_token(request.user)
+
+        # Add trial_start_date explicitly
+        refresh['trial_start_date'] = str(new_subscription.start_date)
+
         access = refresh.access_token
 
         response_data = {
@@ -63,7 +68,7 @@ class FreeTrialView(APIView):
         }
 
         return Response(response_data, status=status.HTTP_200_OK)
-    
+
 class SubscriptionSettingView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
