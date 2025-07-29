@@ -43,7 +43,7 @@ class ChatbotView(APIView):
 
         jwt_token = auth_header.split(" ")[1]
 
-        fastapi_url = "http://127.0.0.1:8001/chat"
+        fastapi_url = "http://127.0.0.1:8011/chat"
 
         payload = {
             "message": serializer.validated_data['message'],
