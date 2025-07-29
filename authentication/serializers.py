@@ -110,7 +110,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['username'] = user.username  # Add username to the token payload
         token['full_name'] = user.full_name
         token['email'] = user.email
-        token['profile_pic'] = user.profile_pic
+        token['profile_pic'] = user.profile_pic if user.profile_pic else 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png'
         subscription_type = Subscription.objects.filter(user=user).first().subscription_type
         if subscription_type == 'TRIAL':
             token['trial_start_date'] = Subscription.objects.filter(user=user).first().start_date
