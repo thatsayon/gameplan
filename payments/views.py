@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from authentication.models import Subscription
+from authentication.serializers import CustomTokenObtainPairSerializer
 from django.utils import timezone
 from .serializers import CheckoutSessionSerializer, SubscriptionSettingSerializer
 from .stripe_service import create_checkout_session
@@ -51,7 +52,16 @@ class FreeTrialView(APIView):
             duration_type='WEEK'
         )
 
-        return Response({"message": "Free trial started successfully."}, status=status.HTTP_200_OK)
+        refresh = CustomTokenObtainPairSerializer.get_token(request.user)
+        access = refresh.access_token
+
+        response_data = {
+            "access_token": str(access),
+            "refresh_token": str(refresh),
+            "message": "Free trial started successfully."
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
 class SubscriptionSettingView(APIView):
     permission_classes = [permissions.IsAuthenticated]
