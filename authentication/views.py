@@ -108,6 +108,8 @@ class SocialLoginView(APIView):
                 full_name=serializer.validated_data['full_name'],
                 username=generate_unique_username(serializer.validated_data['email'])
             )
+            new_user.is_active = True
+            new_user.save()
 
             refresh = CustomTokenObtainPairSerializer.get_token(new_user)
             access = refresh.access_token
