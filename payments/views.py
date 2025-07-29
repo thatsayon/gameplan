@@ -35,6 +35,7 @@ class CreateCheckoutSessionView(APIView):
 
         return Response({"checkout_url": session.url}, status=status.HTTP_200_OK)
 
+
 class FreeTrialView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -43,7 +44,7 @@ class FreeTrialView(APIView):
         if subscription and subscription.subscription_type == 'TRIAL':
             return Response({"detail": "Already subscribed"}, status=status.HTTP_400_BAD_REQUEST)
         
-        subscription = Subscription.objects.create(
+        Subscription.objects.create(
             user=request.user,
             subscription_type='TRIAL',
             start_date=timezone.now(),
@@ -62,7 +63,7 @@ class FreeTrialView(APIView):
         }
 
         return Response(response_data, status=status.HTTP_200_OK)
-
+    
 class SubscriptionSettingView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
