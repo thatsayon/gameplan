@@ -70,6 +70,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://amusing-adder-pleasant.ngrok-free.app",
     "https://w82337b5-8000.inc1.devtunnels.ms",
     "https://gameplan.dailo.app",
+    "https://gameplan-2.vercel.app",
 ]
 
 CSRF_TRUSTED_ORIGINS = [
@@ -80,6 +81,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://amusing-adder-pleasant.ngrok-free.app",
     "https://w82337b5-8000.inc1.devtunnels.ms",
     "https://gameplan.dailo.app",
+    "https://gameplan-2.vercel.app",
 ]
 
 
