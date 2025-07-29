@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from .serializers import (
     UserLoginSerializer,
     UserRegisterSerializer,
+    SocialLoginSerializer,
     AboutSerializer,
     CustomTokenObtainPairSerializer,
     UserResetPasswordSerializer,
@@ -84,6 +85,38 @@ class UserRegisterView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        refresh = CustomTokenObtainPairSerializer.get_token(user)
+        access = refresh.access_token
+
+        return Response({
+            "access_token": str(access),
+            "refresh_token": str(refresh),
+            "message": "User registered successfully."
+        }, status=status.HTTP_201_CREATED)
+
+class SocialLoginView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = SocialLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = User.objects.filter(email=serializer.validated_data['email']).first()
+        if not user:
+            new_user = User.objects.create(
+                email=serializer.validated_data['email'],
+                full_name=serializer.validated_data['full_name'],
+                username=generate_unique_username(serializer.validated_data['email'])
+            )
+
+            refresh = CustomTokenObtainPairSerializer.get_token(new_user)
+            access = refresh.access_token
+            return Response({
+                "access_token": str(access),
+                "refresh_token": str(refresh),
+                "message": "User registered successfully."
+            }, status=status.HTTP_201_CREATED)
+        
         refresh = CustomTokenObtainPairSerializer.get_token(user)
         access = refresh.access_token
 

@@ -4,16 +4,19 @@ from rest_framework import status, permissions, generics
 from django.contrib.auth import get_user_model
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
+from django.db.models import F
 from io import BytesIO
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
-from .models import ChatHistory, ChatClass, SavedChat
+from authentication.models import Subscription
+from .models import ChatHistory, ChatClass, SavedChat, FreeLimit
 from .serializers import (
     ChatbotSerializer,
     ChatHistorySerializer,
     ChatClassSerializer,
     ChatClassCreateSerializer,
     ChatbotSaveSerializer,
+    ChatbotListSerializer
 )
 import requests
 
@@ -24,6 +27,12 @@ class ChatbotView(APIView):
 
     def post(self, request, session_id=None):
         user = request.user
+        active_sub = Subscription.objects.filter(user=user).order_by('-start_date').first()
+
+        # Check if user has reached their free limit
+        if FreeLimit.objects.filter(user=user).first().limit > 5 and active_sub.subscription_type == 'free':
+            return Response({"detail": "You have reached your free limit."}, status=status.HTTP_400_BAD_REQUEST)
+
         serializer = ChatbotSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -63,6 +72,10 @@ class ChatbotView(APIView):
                 user_message=serializer.validated_data['message'],
                 bot_message=bot_response
             )
+
+
+            # Increment the free limit
+            FreeLimit.objects.filter(user=user).update(limit=F('limit') + 1)
 
             return Response({"response": bot_response}, status=status.HTTP_200_OK)
 
@@ -112,6 +125,13 @@ class ChatbotSavedView(APIView):
 
         return Response({"message": "chat saved successfully"}, status=status.HTTP_501_NOT_IMPLEMENTED)
 
+class ChatbotListView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ChatbotListSerializer
+    
+    def get_queryset(self):
+        user = self.request.user
+        return SavedChat.objects.filter(user=user).distinct()
 
 class EexportChatHistory(APIView):
     permission_classes = [permissions.IsAuthenticated]

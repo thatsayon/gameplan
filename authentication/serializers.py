@@ -19,6 +19,11 @@ class UserRegisterSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     password = serializers.CharField(max_length=128, required=True, write_only=True)
 
+class SocialLoginSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    full_name = serializers.CharField(required=True)
+    provider = serializers.CharField(required=True)
+
 class UserResetPasswordSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
 

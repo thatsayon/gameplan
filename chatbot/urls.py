@@ -6,6 +6,7 @@ from .views import (
     CreateChatClassView,
     ChatbotSavedView,
     EexportChatHistory,
+    ChatbotListView,
 )
 
 urlpatterns = [
@@ -14,5 +15,6 @@ urlpatterns = [
     path("create-chat-class/", CreateChatClassView.as_view()),
     path("chat-history/<uuid:pk>/", ChatbotHistoryView.as_view()),
     path("chat-save/<uuid:session_id>/", ChatbotSavedView.as_view()),
+    path("save-list/", ChatbotListView.as_view()),
     path("export-chat-history/<uuid:class_id>/", EexportChatHistory.as_view()),
 ]
