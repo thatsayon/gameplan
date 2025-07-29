@@ -68,6 +68,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://192.168.0.192:3000",
     "http://0.0.0.0:3000",
     "https://amusing-adder-pleasant.ngrok-free.app",
+    "https://w82337b5-8000.inc1.devtunnels.ms",
 ]
 
 CSRF_TRUSTED_ORIGINS = [
@@ -76,6 +77,7 @@ CSRF_TRUSTED_ORIGINS = [
     "http://192.168.0.192:3000",
     "http://0.0.0.0:3000",
     "https://amusing-adder-pleasant.ngrok-free.app",
+    "https://w82337b5-8000.inc1.devtunnels.ms",
 ]
 
 
@@ -158,6 +160,9 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
@@ -185,3 +190,13 @@ SIMPLE_JWT = {
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+
+# email settings
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = env("SMTP_HOST")
+EMAIL_PORT = 465
+EMAIL_USE_SSL = True
+EMAIL_USE_TLS = False
+EMAIL_HOST_USER = env("SMTP_USER")
+EMAIL_HOST_PASSWORD = env("SMTP_PASS")
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER

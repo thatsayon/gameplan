@@ -3,6 +3,7 @@ from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
+from datetime import timedelta
 import uuid
 from django.conf import settings
 
@@ -39,6 +40,8 @@ class UserAccount(AbstractBaseUser, PermissionsMixin):
 
     favorite_sport = models.CharField(max_length=20, blank=True, null=True)
     details = models.TextField(blank=True, null=True)
+
+    can_update_pass = models.BooleanField(default=False)
 
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=False)
@@ -81,10 +84,23 @@ class UserAccount(AbstractBaseUser, PermissionsMixin):
         verbose_name = _("User Account")
         verbose_name_plural = _("User Accounts")
 
+class OTP(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey('UserAccount', on_delete=models.CASCADE)
+    code = models.CharField(max_length=6, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expire_at = models.DateTimeField(default=timezone.now() + timedelta(minutes=10))  # OTP expires in 10 minutes
+
+    def __str__(self):
+        return f"{self.user.username}: {self.code}"
+
+    def is_expired(self):
+        return timezone.now() > self.expire_at
+    
 class Subscription(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     stripe_id = models.CharField(max_length=255, blank=True, null=True)
-    user = models.ForeignKey(UserAccount, on_delete=models.CASCADE)
+    user = models.ForeignKey(UserAccount, on_delete=models.CASCADE, related_name='subscriptions')
     subscription_type = models.CharField(max_length=20, choices=[
         ('FREE', 'Free'),
         ('PAID', 'Paid'),
