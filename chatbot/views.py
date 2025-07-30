@@ -48,7 +48,7 @@ class ChatbotView(APIView):
         payload = {
             "message": serializer.validated_data['message'],
             "session_id": str(session_id),  # Convert UUID to string
-            "user_id": 1,  # Convert UUID to string
+            "user_id": request.user.id,  # Convert UUID to string
             "access_token": jwt_token  # 👈 Pass JWT to FastAPI
         }
 
