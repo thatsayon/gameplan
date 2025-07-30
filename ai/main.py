@@ -1,4 +1,5 @@
 import os
+import json
 import requests
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -30,9 +31,31 @@ tools = [search_tool]
 # --- Bind tool schema to the model --------------------------------------
 llm = llm.bind_tools(tools)                 # <-- absolutely required
  
-# --- Create a dictionary to store memory per session -------------------
-session_memory = defaultdict(lambda: ConversationBufferMemory(
-    memory_key="chat_history", return_messages=True))
+# --- File-based storage for memory ------------------------------------
+MEMORY_STORAGE_DIR = "user_memory"
+os.makedirs(MEMORY_STORAGE_DIR, exist_ok=True)
+ 
+def get_user_memory(session_id: str) -> ConversationBufferMemory:
+    """
+    Retrieve the user's memory from file storage using the session_id.
+    If the file doesn't exist, it returns a new ConversationBufferMemory instance.
+    """
+    memory_file = os.path.join(MEMORY_STORAGE_DIR, f"{session_id}.json")
+    if os.path.exists(memory_file):
+        with open(memory_file, "r") as f:
+            history = json.load(f)
+            memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+            memory.chat_history = history  # Load history from file
+            return memory
+    return ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+ 
+def save_user_memory(session_id: str, memory: ConversationBufferMemory):
+    """
+    Save the user's memory to a file, ensuring each session's data is isolated.
+    """
+    memory_file = os.path.join(MEMORY_STORAGE_DIR, f"{session_id}.json")
+    with open(memory_file, "w") as f:
+        json.dump(memory.chat_history, f)
  
 # --- Create the prompt ---------------------------------------------------
 SYSTEM = (
@@ -70,8 +93,8 @@ async def chat_with_bot(user_message: UserMessage):
         "Authorization": f"Bearer {user_message.access_token}"
     }
  
-    # Use session-specific memory
-    memory = session_memory[user_message.session_id]
+    # Use session-specific memory from file
+    memory = get_user_memory(user_message.session_id)
  
     # 🔁 Get history from Django (authenticated)
     chat_history_response = requests.get(
@@ -105,6 +128,10 @@ async def chat_with_bot(user_message: UserMessage):
  
     # 💬 Generate Gemini response
     response = agent.invoke({"input": full_input})
+ 
+    # Save updated memory back to file
+    memory.chat_history = history
+    save_user_memory(user_message.session_id, memory)
  
     # 🔁 Save message to Django (authenticated)
     requests.post(
