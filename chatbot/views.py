@@ -44,11 +44,11 @@ class ChatbotView(APIView):
         jwt_token = auth_header.split(" ")[1]
 
         fastapi_url = "http://127.0.0.1:8011/chat"
-
+        print(request.user.id)
         payload = {
             "message": serializer.validated_data['message'],
             "session_id": str(session_id),  # Convert UUID to string
-            "user_id": request.user.id,  # Convert UUID to string
+            "user_id": 1,  # Convert UUID to string
             "access_token": jwt_token  # 👈 Pass JWT to FastAPI
         }
 
