@@ -1,156 +1,164 @@
 import os
-import json
-import requests
 from dotenv import load_dotenv
-from fastapi import FastAPI
+import httpx
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from collections import defaultdict
- 
-# --- LangChain imports ---------------------------------------------------
-from langchain_google_genai import ChatGoogleGenerativeAI          # Gemini
-from langchain_tavily import TavilySearch                          # Search tool
-from langchain.memory import ConversationBufferMemory
+
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_tavily import TavilySearch
 from langchain.agents import create_openai_tools_agent, AgentExecutor
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
- 
-# --- Load environment variables ----------------------------------------
-load_dotenv()                     # GOOGLE_API_KEY & TAVILY_API_KEY
- 
-# --- Initialize Gemini model (tool-use ready) --------------------------
-MODEL_ID = "gemini-2.5-flash"      # or "gemini-1.5-flash-latest"
+from langchain.memory import ConversationBufferMemory
+from langchain.memory.chat_message_histories import ChatMessageHistory
+from langchain.schema import HumanMessage, AIMessage
+
+# ---------------------------------------------------------------------
+# 0.  Load secrets / config
+# ---------------------------------------------------------------------
+load_dotenv()
+
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+DJANGO_BASE = os.getenv("DJANGO_BASE", "http://127.0.0.1:8000")
+
+# ---------------------------------------------------------------------
+# 1.  Build GLOBAL, stateless pieces once at import time
+# ---------------------------------------------------------------------
+MODEL_ID = "gemini-2.5-flash"
 llm = ChatGoogleGenerativeAI(
     model=MODEL_ID,
     temperature=0.7,
-    convert_system_message_to_instructions=True  # Gemini best-practice
+    convert_system_message_to_instructions=True,
 )
- 
-# --- Define Tavily tool -------------------------------------------------
-search_tool = TavilySearch(max_results=5)   # schema: {"query": str}
+
+search_tool = TavilySearch(max_results=5)
 tools = [search_tool]
- 
-# --- Bind tool schema to the model --------------------------------------
-llm = llm.bind_tools(tools)                 # <-- absolutely required
- 
-# --- File-based storage for memory ------------------------------------
-MEMORY_STORAGE_DIR = "user_memory"
-os.makedirs(MEMORY_STORAGE_DIR, exist_ok=True)
- 
-def get_user_memory(session_id: str) -> ConversationBufferMemory:
-    """
-    Retrieve the user's memory from file storage using the session_id.
-    If the file doesn't exist, it returns a new ConversationBufferMemory instance.
-    """
-    memory_file = os.path.join(MEMORY_STORAGE_DIR, f"{session_id}.json")
-    if os.path.exists(memory_file):
-        with open(memory_file, "r") as f:
-            history = json.load(f)
-            memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
-            memory.chat_history = history  # Load history from file
-            return memory
-    return ConversationBufferMemory(memory_key="chat_history", return_messages=True)
- 
-def save_user_memory(session_id: str, memory: ConversationBufferMemory):
-    """
-    Save the user's memory to a file, ensuring each session's data is isolated.
-    """
-    memory_file = os.path.join(MEMORY_STORAGE_DIR, f"{session_id}.json")
-    with open(memory_file, "w") as f:
-        json.dump(memory.chat_history, f)
- 
-# --- Create the prompt ---------------------------------------------------
-SYSTEM = (
+llm = llm.bind_tools(tools)
+
+SYSTEM_MESSAGE = (
     "You are SportMate, a helpful sport assistant.\n"
     "Whenever the user asks for live, recent or latest scores or news, "
     "call the `tavily_search` tool with **one** argument: `query`.\n"
     "After the JSON returns, summarise the result in a sentence.\n"
     "For all other questions, answer normally and remember preferences."
 )
- 
-prompt = ChatPromptTemplate.from_messages([
-    ("system", SYSTEM),
-    MessagesPlaceholder("chat_history", optional=True),
-    ("user", "{input}"),
-    MessagesPlaceholder("agent_scratchpad"),
-])
- 
-# --- Build the agent -----------------------------------------------------
-core_agent = create_openai_tools_agent(llm, tools, prompt)   # generic helper
-agent = AgentExecutor(agent=core_agent, tools=tools,
-                      memory=None, verbose=True)  # Memory will be dynamic
- 
-# --- FastAPI Integration -------------------------------------------------
+
+prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", SYSTEM_MESSAGE),
+        MessagesPlaceholder("chat_history", optional=True),
+        ("user", "{input}"),
+        MessagesPlaceholder("agent_scratchpad"),
+    ]
+)
+
+BASE_CHAIN = create_openai_tools_agent(llm, tools, prompt)
+
+# ---------------------------------------------------------------------
+# 2.  Factory: build per-session AgentExecutor
+# ---------------------------------------------------------------------
+
+async def fetch_chat_history(session_id: str, token: str) -> list:
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{DJANGO_BASE}/c/chat-history/{session_id}/",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        if response.status_code != 200:
+            raise HTTPException(status_code=502, detail="Failed to fetch chat history from Django API.")
+        return response.json()
+
+
+async def _build_agent(session_id: str, access_token: str) -> AgentExecutor:
+    chat_history_data = await fetch_chat_history(session_id, access_token)
+
+    history = ChatMessageHistory()
+    for item in chat_history_data:
+        history.add_user_message(item["user_message"])
+        history.add_ai_message(item["bot_message"])
+
+    memory = ConversationBufferMemory(
+        chat_memory=history,
+        return_messages=True,
+    )
+
+    return AgentExecutor(
+        agent=BASE_CHAIN,
+        tools=tools,
+        memory=memory,
+        verbose=False,
+        handle_parsing_errors=True,
+    )
+
+
+# ---------------------------------------------------------------------
+# 3.  FastAPI plumbing
+# ---------------------------------------------------------------------
 app = FastAPI()
- 
+client = httpx.AsyncClient(timeout=10)
+
 class UserMessage(BaseModel):
     message: str
-    session_id: str  # Added session ID to link chat history
+    session_id: str
     user_id: int
     access_token: str
- 
-@app.post("/chat")
-async def chat_with_bot(user_message: UserMessage):
-    headers = {
-        "Authorization": f"Bearer {user_message.access_token}"
-    }
- 
-    # Use session-specific memory from file
-    memory = get_user_memory(user_message.session_id)
- 
-    # 🔁 Get history from Django (authenticated)
-    chat_history_response = requests.get(
-        f"http://127.0.0.1:8000/c/chat-history/{user_message.session_id}/",
-        headers=headers
+
+class ChatResponse(BaseModel):
+    response: str
+
+# Helpers -------------------------------------------------------------
+async def _django_get(path: str, token: str) -> httpx.Response:
+    return await client.get(
+        f"{DJANGO_BASE}{path}",
+        headers={"Authorization": f"Bearer {token}"},
     )
- 
-    if chat_history_response.status_code == 200:
-        chat_history = chat_history_response.json()
-        history = [entry["user_message"] for entry in chat_history]
-        history.append(user_message.message)
-    else:
-        history = [user_message.message]
- 
-    # 🔁 Get user info from the about endpoint
-    about_response = requests.get(
-        "http://127.0.0.1:8000/auth/about/",
-        headers=headers
+
+async def _django_post(path: str, token: str, data: dict) -> None:
+    await client.post(
+        f"{DJANGO_BASE}{path}",
+        json=data,
+        headers={"Authorization": f"Bearer {token}"},
     )
- 
-    if about_response.status_code == 200:
-        about_info = about_response.json()
-        favorite_sport = about_info.get("favorite_sport", "")
-        details = about_info.get("details", "")
-    else:
-        favorite_sport = "Unknown"
-        details = "No details available"
- 
-    # Combine user message with additional user info for a richer AI input
-    full_input = f"{user_message.message}\nFavorite Sport: {favorite_sport}\nDetails: {details}"
- 
-    # 💬 Generate Gemini response
-    response = agent.invoke({"input": full_input})
- 
-    # Save updated memory back to file
-    memory.chat_history = history
-    save_user_memory(user_message.session_id, memory)
- 
-    # 🔁 Save message to Django (authenticated)
-    requests.post(
-        "http://127.0.0.1:8000/chat/history/",
-        json={
-            "message": user_message.message,
-            "session_id": user_message.session_id,
-            "user": user_message.user_id
-        },
-        headers=headers
+
+# Endpoint -------------------------------------------------------------
+@app.post("/chat", response_model=ChatResponse)
+async def chat_with_bot(payload: UserMessage) -> ChatResponse:
+    # Build session-specific agent
+    agent = await _build_agent(payload.session_id, payload.access_token)
+
+    # -- Enrich prompt with user profile --------------------------------
+    try:
+        about_resp = await _django_get("/auth/about/", payload.access_token)
+        about_json = about_resp.json() if about_resp.status_code == 200 else {}
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Django profile fetch failed: {e}")
+
+    favorite = about_json.get("favorite_sport", "Unknown")
+    details = about_json.get("details", "No details available")
+
+    full_input = (
+        f"{payload.message}\n"
+        f"Favorite Sport: {favorite}\n"
+        f"Details: {details}"
     )
- 
-    return {"response": response["output"]}
- 
-# --- Run FastAPI with Uvicorn -------------------------------------------
-# To run this FastAPI app, use the following command in terminal:
-# uvicorn main:app --reload
-# Make sure to replace 'main' with the name of your Python file (without the extension)
- 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    # -- Invoke the agent -----------------------------------------------
+    try:
+        result = agent.invoke({"input": full_input})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    # -- Mirror message to Django (fire-and-forget) ---------------------
+    try:
+        await _django_post(
+            "/chat/history/",
+            payload.access_token,
+            {
+                "message": payload.message,
+                "session_id": payload.session_id,
+                "user": payload.user_id,
+            },
+        )
+    except httpx.HTTPError:
+        pass  # don't block the user if logging fails
+
+    return ChatResponse(response=result["output"])
