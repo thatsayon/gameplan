@@ -143,7 +143,7 @@ async def chat_with_bot(payload: UserMessage) -> ChatResponse:
 
     # -- Invoke the agent -----------------------------------------------
     try:
-        result = agent.invoke({"input": full_input})
+        result = await agent.ainvoke({"input": full_input})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
